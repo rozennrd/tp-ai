@@ -101,20 +101,3 @@ RUN git clone https://github.com/Syllo/nvtop.git \
 && cmake .. \
 && make \
 && make install
-
-
-#Add folder to the container
-#ADD ./Work ./Work
-ADD ./atom ./atom
-ADD ./atom/.bashrc ./.bashrc
-
-RUN chmod -R 777 /home/${UNAME}/atom
-
-#Install Atom
-RUN apt-get $LIMIT update -yq \
-&& dpkg -i ./atom/atom-amd64.deb \
-|| true \
-&& apt --fix-broken install -yq \
-&& dpkg -i ./atom/atom-amd64.deb \
-&& apt-get clean -yq \
-&& rm -rf /var/lib/apt/lists/*

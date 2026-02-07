@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  tp-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tp-ai-container
+
+    environment:
+#      - NVIDIA_VISIBLE_DEVICES=all
+#      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - TF_ENABLE_ONEDNN_OPTS=0
+      - TF_CPP_MIN_LOG_LEVEL=2
+      - PYTHONPATH=/workspace
+    volumes:
+      # Mount the entire project directory
+      - ../:/workspace
+    working_dir: /workspace
+#    command: >
+#      bash -c "
+#        echo '=== TensorFlow/Keras Environment Setup ===' &&
+#        echo 'Activating TensorFlow virtual environment...' &&
+#        source /home/docker/venv_tf/bin/activate &&
+#        echo 'Environment activated. Available packages:' &&
+#        pip list | grep -E '(tensorflow|keras|numpy|matplotlib|pillow|scipy)' &&
+#        echo '' &&
+#        echo 'Project files available in /workspace:' &&
+#        ls -la /workspace &&
+#        echo '' &&
+#        echo 'Starting interactive shell...' &&
+#        exec bash
+#      "
+    ports:
+      # Jupyter notebook port (optional, but useful)
+      - "8888:8888"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
