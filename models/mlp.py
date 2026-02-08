@@ -1,11 +1,20 @@
 from tensorflow import keras
 from keras import layers
 from keras . datasets import mnist
-from combined_datasets import CombinedDataset
-from my_dataset import MyDataset
+
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+from utils.combined_datasets import CombinedDataset
+from data.my_dataset import MyDataset
 import numpy as np
 
-dataset_path = "images_processed"  # Change this to your actual path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
+dataset_path = os.path.join(PROJECT_ROOT, "data", "custom_digits")
+print("Resolved dataset_path:", dataset_path)
+print("Exists?", os.path.exists(dataset_path))
+
     
 # Create dataset
 # dataset = CombinedDataset(dataset_path, augment_custom=True)
@@ -17,6 +26,9 @@ dataset = mnist
 
 # Get training data
 x_train_new_ds, y_train_new_ds = new_dataset.get_training_data(custom_ratio=0.1)
+print("x_new type:", type(x_train_new_ds))
+print("x_new shape:", getattr(x_train_new_ds, "shape", None))
+print("y_new shape:", getattr(y_train_new_ds, "shape", None))
 # x_test, y_test = dataset.get_test_data()
 (x_train, y_train), (x_test, y_test) = keras.datasets.mnist.load_data()
 print(f"\nTraining data shape: {x_train.shape}")
