@@ -242,5 +242,5 @@ if __name__ == "__main__":
     print(f"CUSTOM AUGMENT: loss={custom_aug[0]:.4f} | acc={custom_aug[1]:.4f}")
     
     print("\nDelta (CUSTOM - MNIST):")
-    print(f"NO AUG : loss: {mnist_no[0]:.4f - custom_no[0]:+.4f}   ;   acc: {mnist_no[1]:.4f - custom_no[1]:.4f}")
-    print(f"AUG : loss: {mnist_aug[0]:.4f - custom_aug[0]:+.4f}   ;    acc: {mnist_aug[1]:.4f - custom_aug[1]:.4f}") 
+    print(f"NO AUG : loss: {mnist_no[0]:.4f - custom_no[0]:.4f}   ;   acc: {mnist_no[1]:.4f - custom_no[1]:.4f}")
+    print(f"AUG : loss: {mnist_aug[0]:.4f - custom_aug[0]:.4f}   ;    acc: {mnist_aug[1]:.4f - custom_aug[1]:.4f}") 
