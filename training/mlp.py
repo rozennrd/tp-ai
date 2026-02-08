@@ -1,8 +1,12 @@
+import sys
+from pathlib import Path
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.append(str(PROJECT_ROOT))
 from tensorflow import keras
 from keras import layers
 from keras . datasets import mnist
-from combined_datasets import CombinedDataset
-from my_dataset import MyDataset
+from utils.combined_datasets import CombinedDataset
+from data.my_dataset import MyDataset
 import numpy as np
 
 dataset_path = "images_processed"  # Change this to your actual path

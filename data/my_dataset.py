@@ -5,7 +5,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 
 class MyDataset:
-    def __init__(self, custom_images_path, *arg, **kwargs):
+    def __init__(self, custom_images_path):
         print(f"Loading datasets from: {custom_images_path}")
         
         # Load custom dataset
@@ -22,7 +22,7 @@ class MyDataset:
         if len(self.custom_images) > 0:
             self.custom_images = self.custom_images / 255.0
 
-    def load_custom_dataset(self, path,  *arg, **kwargs):
+    def load_custom_dataset(self, path):
         """Load your custom BMP images."""
         images = []
         labels = []
@@ -63,7 +63,7 @@ class MyDataset:
         print(f"Successfully loaded {len(images)} images from custom dataset")
         return np.array(images), np.array(labels) 
 
-    def get_training_data(self,  *arg, **kwargs):
+    def get_training_data(self):
         """Get training data from custom dataset."""
         print(f"\nCreating training dataset")
         
@@ -83,7 +83,7 @@ class MyDataset:
         
         return custom_images, custom_labels
     
-    def get_test_data(self,  *arg, **kwargs):
+    def get_test_data(self):
         """Get test data from custom dataset."""
         if len(self.custom_images) == 0:
             print("ERROR: No custom images available!")
@@ -100,7 +100,7 @@ class MyDataset:
         
         return test_images, test_labels
     
-    def visualize_samples(self, num_samples=10,  *arg, **kwargs):
+    def visualize_samples(self, num_samples=10):
         """Visualize samples from the custom dataset."""
         if len(self.custom_images) == 0:
             print("No custom images to visualize!")
@@ -122,7 +122,7 @@ class MyDataset:
         plt.tight_layout()
         plt.show()
     
-    def augment_dataset(self, images, labels, *arg, **kwargs):
+    def augment_dataset(self, images, labels):
         """Apply data augmentation to custom dataset."""
         if len(images) == 0:
             return images, labels
@@ -150,4 +150,3 @@ class MyDataset:
                 pass
         
         return np.array(augmented_images), np.array(augmented_labels)
-    

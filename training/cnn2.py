@@ -61,7 +61,6 @@ def evaluate(model, loader, device, criterion):
 
     return loss_sum / total, correct / total
 
-
 def train_one_dataset(train_loader, test_loader, device, epochs=20, lr=1e-3, weight_decay=0.0):
     model = BasicConvNet().to(device)
     criterion = nn.CrossEntropyLoss()
@@ -84,7 +83,7 @@ def train_one_dataset(train_loader, test_loader, device, epochs=20, lr=1e-3, wei
             if batch_idx % 200 == 0:
                 print(f"epoch={epoch+1}/{epochs} batch={batch_idx}, loss={loss.item():.4f}")
 
-        # eval à chaque epoch (pour voir si ça sur-apprend)
+        # eval    chaque epoch (pour voir si   a sur-apprend)
         test_loss, test_acc = evaluate(model, test_loader, device, criterion)
         print(f"  -> test_loss={test_loss:.4f} test_acc={test_acc:.4f}")
 
@@ -134,7 +133,7 @@ def train_mnist(augment=False):
 
 
 # -------------------------
-# 2) Train BDD perso (BMP 28x28) puis test sur la même BDD (split)
+# 2) Train BDD perso (BMP 28x28) puis test sur la m  me BDD (split)
 # -------------------------
 class CustomDigitsDataset(Dataset):
     """
@@ -148,7 +147,7 @@ class CustomDigitsDataset(Dataset):
 
         self.files = sorted(glob.glob(os.path.join(root, "*.bmp")))
         if len(self.files) == 0:
-            raise FileNotFoundError(f"Aucun .bmp trouvé dans {root}")
+            raise FileNotFoundError(f"Aucun .bmp trouv   dans {root}")
 
     def __len__(self):
         return len(self.files)
@@ -182,7 +181,7 @@ def train_personnal(augment=False):
         transforms.Lambda(lambda x: 1.0 - x),             # fond blanc
         transforms.Normalize((0.1307,), (0.3081,)),
     ])
-
+    
     # Train: preprocess + (optionnel) augmentation
     if augment:
         transform_train = transforms.Compose([
@@ -200,7 +199,7 @@ def train_personnal(augment=False):
     else:
         transform_train = transform_test
 
-    # IMPORTANT: pour avoir train/test avec transforms différents,
+    # IMPORTANT: pour avoir train/test avec transforms diff  rents,
     # on charge deux datasets identiques puis on split les indices.
     full_train = CustomDigitsDataset(custom_root, transform=transform_train)
     full_test  = CustomDigitsDataset(custom_root, transform=transform_test)
@@ -231,17 +230,17 @@ def train_personnal(augment=False):
 # -------------------------
 if __name__ == "__main__":
     mnist_no = train_mnist(augment=False)
-    mnist_aug = train_mnist(augment=true)
+    mnist_aug = train_mnist(augment=True)
 
     custom_no = train_personnal(augment=False)
     custom_aug = train_personnal(augment=True)
 
     print("\n=== COMPARAISON ===")
     print(f"MNIST  NOAUG: loss={mnist_no[0]:.4f} | acc={mnist_no[1]:.4f}")
-    print(f"MNIST AUGMENT: loss={mnist_aug[0]:.4f}, acc={mnist_aug[0]:.4f}")
-    print(f"CUSTOM NOAUG: loss={custom_no[0]:.4f}, acc={custom_no[0]:.4f}")
-    print(f"CUSTOM AUGMENT: loss={custom_aug[0]:.4f} | acc={custom_aug[0]:.4f}")
-
+    print(f"MNIST AUGMENT: loss={mnist_aug[0]:.4f}, acc={mnist_aug[1]:.4f}")
+    print(f"CUSTOM NOAUG: loss={custom_no[0]:.4f}, acc={custom_no[1]:.4f}")
+    print(f"CUSTOM AUGMENT: loss={custom_aug[0]:.4f} | acc={custom_aug[1]:.4f}")
+    
     print("\nDelta (CUSTOM - MNIST):")
-    print(f"NO AUG : loss: {mnist_no[0]:.4f} - {custom_no[0]:+.4f} ��;   acc: {mnist_no[1]:.4f} - {custom_no[1]:.4f}")
-    print(f"AUG : loss: {mnist_aug[0]:.4f} - {custom_aug[0]:+.4f}   ;    acc: {mnist_aug[1]:.4f} - {custom_aug[1]:.4f}") 
+    print(f"NO AUG : loss: {mnist_no[0]:.4f - custom_no[0]:+.4f}   ;   acc: {mnist_no[1]:.4f - custom_no[1]:.4f}")
+    print(f"AUG : loss: {mnist_aug[0]:.4f - custom_aug[0]:+.4f}   ;    acc: {mnist_aug[1]:.4f - custom_aug[1]:.4f}") 
