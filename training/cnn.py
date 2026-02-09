@@ -133,24 +133,7 @@ def save_confusion_matrix_png(cm, out_path, title="Confusion Matrix"):
 
 # -------------------------
 # Common utils
-# -------------------------
-def export_cnn_weights_txt(model, out_path="models/cnn_weights.txt"):
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-
-    with open(out_path, "w") as f:
-        for name, param in model.state_dict().items():
-            w = param.detach().cpu().numpy()
-            f.write(f"# name: {name}\n")
-            f.write("# shape: " + " ".join(map(str, w.shape)) + "\n")
-            w_flat = w.reshape(-1)
-            for i in range(0, len(w_flat), 16):
-                chunk = w_flat[i:i+16]
-                f.write(" ".join(f"{x:.8f}" for x in chunk) + "\n")
-            f.write("\n")
-
-    print(f"[OK] Exported CNN weights to {out_path}")
-
-
+# ------------------------
 def evaluate(model, loader, device, criterion):
     model.eval()
     correct, total = 0, 0
@@ -207,9 +190,6 @@ def train_one_dataset(train_loader, test_loader, device, epochs=20, lr=1e-3, wei
     os.makedirs("models", exist_ok=True)
     torch.save(model.state_dict(), "models/cnn.pth")
     print("[OK] Saved checkpoint: models/cnn.pth")
-
-    # Export des poids
-    export_cnn_weights_txt(model, "models/cnn_weights.txt")
 
     test_loss, test_acc = evaluate(model, test_loader, device, criterion)
     return model, test_loss, test_acc
