@@ -7,6 +7,24 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
+from torchvision.transforms import InterpolationMode
+
+import numpy as np
+
+# Optional (for saving nice PNG confusion matrices)
+try:
+    from sklearn.metrics import confusion_matrix
+    SKLEARN_OK = True
+except Exception:
+    SKLEARN_OK = False
+
+# matplotlib only needed if you want PNGs
+try:
+    import matplotlib.pyplot as plt
+    MPL_OK = True
+except Exception:
+    MPL_OK = False
+
 
 # -------------------------
 # Model
@@ -37,6 +55,81 @@ class BasicConvNet(nn.Module):
     def forward(self, x):
         x = self.features(x)
         return self.classifier(x)
+
+
+# -------------------------
+# Confusion Matrix utils
+# -------------------------
+def _confusion_matrix_fallback(y_true, y_pred, n_classes=10):
+    cm = np.zeros((n_classes, n_classes), dtype=np.int64)
+    for t, p in zip(y_true, y_pred):
+        cm[int(t), int(p)] += 1
+    return cm
+
+def compute_confusion_matrix(model, loader, device, n_classes=10):
+    """
+    Returns:
+      cm (np.ndarray): shape (n_classes, n_classes)
+    """
+    model.eval()
+    y_true, y_pred = [], []
+
+    with torch.no_grad():
+        for images, labels in loader:
+            images = images.to(device)
+            logits = model(images)
+            preds = logits.argmax(dim=1).cpu().numpy()
+
+            y_true.extend(labels.cpu().numpy())
+            y_pred.extend(preds)
+
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+
+    if SKLEARN_OK:
+        cm = confusion_matrix(y_true, y_pred, labels=list(range(n_classes)))
+    else:
+        cm = _confusion_matrix_fallback(y_true, y_pred, n_classes=n_classes)
+
+    return cm
+
+def print_confusion_matrix(cm, title="Confusion Matrix"):
+    print(f"\n--- {title} ---")
+    print(cm)
+    print("row=true label, col=pred label")
+
+def save_confusion_matrix_png(cm, out_path, title="Confusion Matrix"):
+    """
+    Saves a PNG heatmap if matplotlib is available.
+    Works in Docker (no GUI needed).
+    """
+    if not MPL_OK:
+        print(f"[WARN] matplotlib not available -> cannot save {out_path}")
+        return
+
+    fig = plt.figure(figsize=(7, 6))
+    plt.imshow(cm, interpolation="nearest")
+    plt.title(title)
+    plt.xlabel("Predicted label")
+    plt.ylabel("True label")
+    plt.colorbar()
+
+    # ticks 0..9
+    ticks = np.arange(cm.shape[0])
+    plt.xticks(ticks, ticks)
+    plt.yticks(ticks, ticks)
+
+    # annotate (optional, can be noisy)
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            plt.text(j, i, str(cm[i, j]), ha="center", va="center", fontsize=7)
+
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    plt.savefig(out_path, dpi=200)
+    plt.close(fig)
+    print(f"[OK] Saved confusion matrix to {out_path}")
+
 
 # -------------------------
 # Common utils
@@ -83,7 +176,6 @@ def train_one_dataset(train_loader, test_loader, device, epochs=20, lr=1e-3, wei
             if batch_idx % 200 == 0:
                 print(f"epoch={epoch+1}/{epochs} batch={batch_idx}, loss={loss.item():.4f}")
 
-        # eval à chaque epoch (pour voir si ça sur-apprend)
         test_loss, test_acc = evaluate(model, test_loader, device, criterion)
         print(f"  -> test_loss={test_loss:.4f} test_acc={test_acc:.4f}")
 
@@ -95,31 +187,55 @@ def train_one_dataset(train_loader, test_loader, device, epochs=20, lr=1e-3, wei
         model.load_state_dict(best)
 
     test_loss, test_acc = evaluate(model, test_loader, device, criterion)
-    return test_loss, test_acc
+    return model, test_loss, test_acc
+
 
 # -------------------------
-# 1) Train MNIST 
+# 1) Train MNIST
 # -------------------------
-def train_mnist():
-    transform = transforms.Compose([
-        transforms.ToTensor()
-    ])
+def train_mnist(augment=False, save_cm=True, cm_dir="./confusion_matrices"):
+    if augment:
+        transform_train = transforms.Compose([
+            transforms.RandomAffine(
+                degrees=10,
+                translate=(0.10, 0.10),
+                scale=(0.90, 1.10),
+                interpolation=InterpolationMode.BILINEAR,
+                fill=0
+            ),
+            transforms.ToTensor(),
+        ])
+    else:
+        transform_train = transforms.Compose([transforms.ToTensor()])
 
-    train_ds = datasets.MNIST(root="./data", train=True, download=True, transform=transform)
-    test_ds  = datasets.MNIST(root="./data", train=False, download=True, transform=transform)
+    transform_test = transforms.Compose([transforms.ToTensor()])
+
+    train_ds = datasets.MNIST(root="./data", train=True, download=True, transform=transform_train)
+    test_ds  = datasets.MNIST(root="./data", train=False, download=True, transform=transform_test)
 
     train_loader = DataLoader(train_ds, batch_size=128, shuffle=True)
     test_loader  = DataLoader(test_ds, batch_size=256, shuffle=False)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    test_loss, test_acc = train_one_dataset(train_loader, test_loader, device, epochs=5, lr=1e-3)
+    model, test_loss, test_acc = train_one_dataset(train_loader, test_loader, device, epochs=5, lr=1e-3)
 
-    print(f"[MNIST] Test loss: {test_loss:.4f}")
-    print(f"[MNIST] Test accuracy: {test_acc:.4f}")
+    tag = "AUG" if augment else "NOAUG"
+    print(f"[MNIST-{tag}] Test loss: {test_loss:.4f}")
+    print(f"[MNIST-{tag}] Test accuracy: {test_acc:.4f}")
+
+    # Confusion Matrix on MNIST test set
+    cm = compute_confusion_matrix(model, test_loader, device, n_classes=10)
+    print_confusion_matrix(cm, title=f"MNIST-{tag} Confusion Matrix")
+
+    if save_cm:
+        out_path = os.path.join(cm_dir, f"cm_mnist_{tag.lower()}.png")
+        save_confusion_matrix_png(cm, out_path, title=f"MNIST-{tag} Confusion Matrix")
+
     return test_loss, test_acc
 
+
 # -------------------------
-# 2) Train BDD perso (BMP 28x28) puis test sur la même BDD (split)
+# 2) Train BDD perso (BMP 28x28) then test on same BDD (split)
 # -------------------------
 class CustomDigitsDataset(Dataset):
     """
@@ -142,13 +258,10 @@ class CustomDigitsDataset(Dataset):
         path = self.files[idx]
         filename = os.path.basename(path)
 
-        # label = avant le "-"
-        # ex: "3-12.bmp" -> 3
         label_str = filename.split("-")[0]
         label = int(label_str)
 
-        # open image
-        img = Image.open(path).convert("L")  # L = grayscale
+        img = Image.open(path).convert("L")  # grayscale
 
         if self.transform is not None:
             img = self.transform(img)
@@ -156,38 +269,62 @@ class CustomDigitsDataset(Dataset):
         return img, label
 
 
-def train_personnal():
+def train_personnal(augment=False, save_cm=True, cm_dir="./confusion_matrices"):
     custom_root = "./data/custom_digits"
     if not os.path.isdir(custom_root):
         raise FileNotFoundError(f"Dossier introuvable: {custom_root}")
 
-    transform = transforms.Compose([
-        transforms.ToTensor(),  # PIL grayscale -> (1,28,28) + /255
-	transforms.Lambda(lambda x: 1.0 - x), # Car fond blanc
-	transforms.Normalize((0.1307,), (0.3081,)), # Comme MNIST
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Lambda(lambda x: 1.0 - x),             # fond blanc -> MNIST style
+        transforms.Normalize((0.1307,), (0.3081,)),
     ])
 
-    full_ds = CustomDigitsDataset(custom_root, transform=transform)
+    if augment:
+        transform_train = transforms.Compose([
+            transforms.RandomAffine(
+                degrees=10,
+                translate=(0.10, 0.10),
+                scale=(0.90, 1.10),
+                interpolation=InterpolationMode.BILINEAR,
+                fill=255  # fond blanc avant inversion
+            ),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: 1.0 - x),
+            transforms.Normalize((0.1307,), (0.3081,)),
+        ])
+    else:
+        transform_train = transform_test
 
-    # split train/test sur la même BDD custom
-    n_total = len(full_ds)
+    full_train = CustomDigitsDataset(custom_root, transform=transform_train)
+    full_test  = CustomDigitsDataset(custom_root, transform=transform_test)
+
+    n_total = len(full_train)
     n_train = int(0.8 * n_total)
     n_test = n_total - n_train
 
-    train_ds, test_ds = random_split(
-        full_ds,
-        [n_train, n_test],
-        generator=torch.Generator().manual_seed(42)
-    )
+    g = torch.Generator().manual_seed(42)
+    train_ds, _ = random_split(full_train, [n_train, n_test], generator=g)
+    _, test_ds  = random_split(full_test,  [n_train, n_test], generator=torch.Generator().manual_seed(42))
 
     train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)
     test_loader  = DataLoader(test_ds, batch_size=256, shuffle=False)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    test_loss, test_acc = train_one_dataset(train_loader, test_loader, device, epochs=20, lr=1e-3)
+    model, test_loss, test_acc = train_one_dataset(train_loader, test_loader, device, epochs=20, lr=1e-3)
 
-    print(f"[CUSTOM] Test loss: {test_loss:.4f}")
-    print(f"[CUSTOM] Test accuracy: {test_acc:.4f}")
+    tag = "AUG" if augment else "NOAUG"
+    print(f"[CUSTOM-{tag}] Test loss: {test_loss:.4f}")
+    print(f"[CUSTOM-{tag}] Test accuracy: {test_acc:.4f}")
+
+    # Confusion Matrix on CUSTOM test split
+    cm = compute_confusion_matrix(model, test_loader, device, n_classes=10)
+    print_confusion_matrix(cm, title=f"CUSTOM-{tag} Confusion Matrix")
+
+    if save_cm:
+        out_path = os.path.join(cm_dir, f"cm_custom_{tag.lower()}.png")
+        save_confusion_matrix_png(cm, out_path, title=f"CUSTOM-{tag} Confusion Matrix")
+
     return test_loss, test_acc
 
 
@@ -195,13 +332,18 @@ def train_personnal():
 # 3) Compare
 # -------------------------
 if __name__ == "__main__":
-    test_loss_mnist, test_acc_mnist = train_mnist()
-    test_loss_custom, test_acc_custom = train_personnal()
+    mnist_no = train_mnist(augment=False)
+    mnist_aug = train_mnist(augment=True)
+
+    custom_no = train_personnal(augment=False)
+    custom_aug = train_personnal(augment=True)
 
     print("\n=== COMPARAISON ===")
-    print(f"MNIST  : loss={test_loss_mnist:.4f} | acc={test_acc_mnist:.4f}")
-    print(f"CUSTOM : loss={test_loss_custom:.4f} | acc={test_acc_custom:.4f}")
+    print(f"MNIST  NOAUG: loss={mnist_no[0]:.4f} | acc={mnist_no[1]:.4f}")
+    print(f"MNIST AUGMENT: loss={mnist_aug[0]:.4f} | acc={mnist_aug[1]:.4f}")
+    print(f"CUSTOM NOAUG: loss={custom_no[0]:.4f} | acc={custom_no[1]:.4f}")
+    print(f"CUSTOM AUGMENT: loss={custom_aug[0]:.4f} | acc={custom_aug[1]:.4f}")
 
     print("\nDelta (CUSTOM - MNIST):")
-    print(f"loss: {test_loss_custom - test_loss_mnist:+.4f}")
-    print(f"acc : {test_acc_custom - test_acc_mnist:+.4f}")
+    print(f"NO AUG : loss: {custom_no[0] - mnist_no[0]:+.4f}   ;   acc: {custom_no[1] - mnist_no[1]:+.4f}")
+    print(f"AUG    : loss: {custom_aug[0] - mnist_aug[0]:+.4f}   ;   acc: {custom_aug[1] - mnist_aug[1]:+.4f}")
