@@ -1,0 +1,52 @@
+{
+  "tensors": [
+    {
+      "name": "weight_0",
+      "shape": [
+        784,
+        256
+      ],
+      "dtype": "float32"
+    },
+    {
+      "name": "weight_1",
+      "shape": [
+        256
+      ],
+      "dtype": "float32"
+    },
+    {
+      "name": "weight_2",
+      "shape": [
+        256,
+        128
+      ],
+      "dtype": "float32"
+    },
+    {
+      "name": "weight_3",
+      "shape": [
+        128
+      ],
+      "dtype": "float32"
+    },
+    {
+      "name": "weight_4",
+      "shape": [
+        128,
+        10
+      ],
+      "dtype": "float32"
+    },
+    {
+      "name": "weight_5",
+      "shape": [
+        10
+      ],
+      "dtype": "float32"
+    }
+  ],
+  "model": "mlp",
+  "dataset": "MNIST",
+  "framework": "keras"
+}

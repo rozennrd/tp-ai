@@ -1,175 +1,132 @@
-"""
-Il charge un modèle sauvegardé (checkpoint) puis exporte ses tenseurs en .txt (et un .json meta).
-
-Supporté :
-Sorties (par défaut dans ./models/) :
-- <name>_weights.txt
-- <name>_meta.json
-
-Format TXT (parseable facilement en C) :
-# name: <tensor_name>
-# shape: d0 d1 d2 ...
-v0 v1 v2 v3 ...
-...
-
-Exemples :
-  # CNN PyTorch (ton BasicConvNet)
-  python3 training/export_weights.py --pytorch models/cnn.pth --name cnn
-
-  # MLP Keras
-  python3 training/export_weights.py --keras models/mlp.keras --name mlp
-
-Options utiles :
-  --out-dir models
-  --per-line 16
-"""
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 import os
 import json
 import argparse
-from typing import Any, Dict, List, Tuple
-
 import numpy as np
 
 
-# -------------------------
+# ============================================================
 # Utils
-# -------------------------
-def ensure_dir(path: str) -> None:
-    os.makedirs(path, exist_ok=True)
-
-
-def chunks_flat(arr: np.ndarray, per_line: int) -> List[np.ndarray]:
-    flat = arr.reshape(-1)
-    return [flat[i:i + per_line] for i in range(0, len(flat), per_line)]
-
-
-def write_txt_dump(out_txt: str, tensors: List[Tuple[str, np.ndarray]], per_line: int = 16) -> None:
-    with open(out_txt, "w", encoding="utf-8") as f:
+# ============================================================
+def write_txt_dump(out_txt, tensors, per_line=16):
+    with open(out_txt, "w") as f:
         for name, arr in tensors:
             arr = np.asarray(arr)
-
-            # Header
             f.write(f"# name: {name}\n")
             f.write("# shape: " + " ".join(map(str, arr.shape)) + "\n")
-            f.write(f"# dtype: {arr.dtype}\n")
 
-            # Values
-            for chunk in chunks_flat(arr, per_line):
-                f.write(" ".join(f"{float(x):.8f}" for x in chunk) + "\n")
+            flat = arr.reshape(-1)
+            for i in range(0, len(flat), per_line):
+                chunk = flat[i:i + per_line]
+                f.write(" ".join(f"{x:.8f}" for x in chunk) + "\n")
             f.write("\n")
 
 
-def write_meta(out_json: str, tensors: List[Tuple[str, np.ndarray]], extra: Dict[str, Any]) -> None:
+def write_meta(out_json, tensors, extra):
     meta = {
         "tensors": [
-            {"name": name, "shape": list(np.asarray(arr).shape), "dtype": str(np.asarray(arr).dtype)}
+            {"name": name, "shape": list(arr.shape), "dtype": str(arr.dtype)}
             for name, arr in tensors
         ],
         **extra
     }
-    with open(out_json, "w", encoding="utf-8") as f:
+    with open(out_json, "w") as f:
         json.dump(meta, f, indent=2)
 
 
-# -------------------------
-# Exporters
-# -------------------------
-def export_pytorch(state_path: str) -> List[Tuple[str, np.ndarray]]:
-    try:
-        import torch
-    except Exception as e:
-        raise RuntimeError("PyTorch n'est pas disponible dans cet environnement.") from e
+# ============================================================
+# PyTorch export (CNN)
+# ============================================================
+def export_pytorch(pth_path):
+    import torch
 
-    obj = torch.load(state_path, map_location="cpu")
+    state = torch.load(pth_path, map_location="cpu")
+    if not isinstance(state, dict):
+        raise RuntimeError("cnn.pth does not contain a valid state_dict")
 
-    # obj peut être:
-    # - un state_dict directement
-    # - un dict contenant 'state_dict' (checkpoint custom)
-    if isinstance(obj, dict) and "state_dict" in obj and isinstance(obj["state_dict"], dict):
-        state = obj["state_dict"]
-    elif isinstance(obj, dict):
-        # On suppose que c'est déjà un state_dict
-        state = obj
-    else:
-        raise ValueError("Format PyTorch non supporté: attendu dict/state_dict/checkpoint.")
-
-    tensors: List[Tuple[str, np.ndarray]] = []
-    for name, t in state.items():
-        # t est un torch.Tensor
-        arr = t.detach().cpu().numpy()
-        tensors.append((name, arr))
+    tensors = []
+    for name, tensor in state.items():
+        tensors.append((name, tensor.detach().cpu().numpy()))
 
     return tensors
 
 
-def export_keras(model_path: str) -> List[Tuple[str, np.ndarray]]:
-    try:
-        from tensorflow import keras
-    except Exception as e:
-        raise RuntimeError("TensorFlow/Keras n'est pas disponible dans cet environnement.") from e
+# ============================================================
+# Keras export (MLP)
+# ============================================================
+def export_keras(keras_path):
+    from tensorflow import keras
 
-    model = keras.models.load_model(model_path)
+    model = keras.models.load_model(keras_path)
+    weights = model.get_weights()
 
-    weights = model.get_weights()  # [W0, b0, W1, b1, ...]
-    tensors: List[Tuple[str, np.ndarray]] = []
-
-    # On nomme par index + type (dense/kernel, dense/bias...) quand possible
-    # Keras ne donne pas toujours de noms explicites via get_weights().
+    tensors = []
     for i, w in enumerate(weights):
         tensors.append((f"weight_{i}", np.asarray(w)))
 
     return tensors
 
 
-# -------------------------
+# ============================================================
 # Main
-# -------------------------
-def main() -> None:
-    p = argparse.ArgumentParser(description="Export des poids (PyTorch/Keras) vers TXT + JSON meta.")
-    g = p.add_mutually_exclusive_group(required=True)
-    g.add_argument("--pytorch", type=str, help="Chemin vers checkpoint PyTorch (.pth/.pt) contenant un state_dict.")
-    g.add_argument("--keras", type=str, help="Chemin vers modèle Keras (.keras/.h5).")
+# ============================================================
+def main():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("-c", "--cnn", action="store_true", help="Export CNN weights")
+    parser.add_argument("-m", "--mlp", action="store_true", help="Export MLP weights")
+    args = parser.parse_args()
 
-    p.add_argument("--name", type=str, required=True, help="Nom logique du modèle (ex: cnn, mlp).")
-    p.add_argument("--out-dir", type=str, default="models", help="Dossier de sortie (défaut: models).")
-    p.add_argument("--per-line", type=int, default=16, help="Nombre de valeurs par ligne dans le TXT.")
-    p.add_argument("--float32", action="store_true", help="Caster tous les tenseurs en float32 avant export.")
-    args = p.parse_args()
+    # No option → explain usage
+    if not args.cnn and not args.mlp:
+        print(
+            "\nUsage:\n"
+            "  -c   Export CNN weights (from models/cnn.pth)\n"
+            "  -m   Export MLP weights (from models/mlp.keras)\n\n"
+            "Examples:\n"
+            "  python3 training/export_weights.py -c\n"
+            "  python3 training/export_weights.py -m\n"
+            "  python3 training/export_weights.py -c -m\n"
+        )
+        return
 
-    ensure_dir(args.out_dir)
+    out_dir = "models"
+    os.makedirs(out_dir, exist_ok=True)
 
-    if args.pytorch:
-        in_path = args.pytorch
-        tensors = export_pytorch(in_path)
-        kind = "pytorch"
-    else:
-        in_path = args.keras
-        tensors = export_keras(in_path)
-        kind = "keras"
+    # ---------- CNN ----------
+    if args.cnn:
+        cnn_ckpt = os.path.join(out_dir, "cnn.pth")
+        if not os.path.isfile(cnn_ckpt):
+            raise FileNotFoundError("models/cnn.pth not found")
 
-    if args.float32:
-        tensors = [(n, np.asarray(a, dtype=np.float32)) for n, a in tensors]
+        print("[INFO] Exporting CNN weights")
+        tensors = export_pytorch(cnn_ckpt)
 
-    out_txt = os.path.join(args.out_dir, f"{args.name}_weights.txt")
-    out_json = os.path.join(args.out_dir, f"{args.name}_meta.json")
+        write_txt_dump(os.path.join(out_dir, "cnn_weights.txt"), tensors)
+        write_meta(
+            os.path.join(out_dir, "cnn_meta.json"),
+            tensors,
+            {"model": "cnn", "dataset": "MNIST", "framework": "pytorch"}
+        )
+        print("[OK] CNN exported")
 
-    write_txt_dump(out_txt, tensors, per_line=args.per_line)
-    write_meta(
-        out_json,
-        tensors,
-        extra={
-            "name": args.name,
-            "source_kind": kind,
-            "source_path": in_path,
-            "format": "txt+json",
-            "per_line": args.per_line,
-        }
-    )
+    # ---------- MLP ----------
+    if args.mlp:
+        mlp_ckpt = os.path.join(out_dir, "mlp.keras")
+        if not os.path.isfile(mlp_ckpt):
+            raise FileNotFoundError("models/mlp.keras not found")
 
-    print(f"[OK] Export terminé")
-    print(f"  - TXT : {out_txt}")
-    print(f"  - META: {out_json}")
+        print("[INFO] Exporting MLP weights")
+        tensors = export_keras(mlp_ckpt)
+
+        write_txt_dump(os.path.join(out_dir, "mlp_weights.txt"), tensors)
+        write_meta(
+            os.path.join(out_dir, "mlp_meta.json"),
+            tensors,
+            {"model": "mlp", "dataset": "MNIST", "framework": "keras"}
+        )
+        print("[OK] MLP exported")
 
 
 if __name__ == "__main__":
