@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from data.my_dataset import MyDataset
 
-# Optional: save PNG confusion matrices (works without GUI)
+
 try:
     import matplotlib.pyplot as plt
     MPL_OK = True
@@ -24,17 +24,18 @@ except Exception:
 PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
 CUSTOM_ROOT = os.path.join(PROJECT_ROOT, "data", "custom_digits")
 CM_DIR = os.path.join(PROJECT_ROOT, "confusion_matrices_mlp")
+MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 
 
 # -------------------------
-# Constants (match your CNN preprocessing)
+# Constants 
 # -------------------------
 MNIST_MEAN = 0.1307
 MNIST_STD = 0.3081
 
 
 # -------------------------
-# Model: EXACT same as your current MLP
+# Model
 # -------------------------
 def build_mlp():
     model = keras.Sequential([
@@ -49,7 +50,7 @@ def build_mlp():
 
 
 # -------------------------
-# Preprocess (CUSTOM only) aligned with CNN
+# Preprocess aligned with CNN
 # -------------------------
 def preprocess_custom(x: np.ndarray) -> np.ndarray:
     """
@@ -76,12 +77,9 @@ def preprocess_custom(x: np.ndarray) -> np.ndarray:
 
 
 # -------------------------
-# Light augmentation for CUSTOM (train only)
+# Light augmentation for CUSTOM 
 # -------------------------
 def augment_custom_train(x_train: np.ndarray, seed: int = 42) -> np.ndarray:
-    """
-    Small affine-like augmentation using Keras preprocessing layers via a temporary model.
-    """
     x4 = x_train[..., None]  # (N, 28, 28, 1)
 
     aug = keras.Sequential([
@@ -107,7 +105,7 @@ def split_train_test(x: np.ndarray, y: np.ndarray, train_ratio: float = 0.8, see
 
 
 # -------------------------
-# Confusion matrix utils (no sklearn required)
+# Confusion matrix utils
 # -------------------------
 def confusion_matrix_np(y_true: np.ndarray, y_pred: np.ndarray, n_classes: int = 10) -> np.ndarray:
     cm = np.zeros((n_classes, n_classes), dtype=np.int64)
@@ -115,10 +113,12 @@ def confusion_matrix_np(y_true: np.ndarray, y_pred: np.ndarray, n_classes: int =
         cm[int(t), int(p)] += 1
     return cm
 
+
 def print_confusion_matrix(cm: np.ndarray, title: str):
     print(f"\n--- {title} ---")
     print(cm)
     print("row=true label, col=pred label")
+
 
 def save_confusion_matrix_png(cm: np.ndarray, out_path: str, title: str):
     if not MPL_OK:
@@ -138,7 +138,6 @@ def save_confusion_matrix_png(cm: np.ndarray, out_path: str, title: str):
     plt.xticks(ticks, ticks)
     plt.yticks(ticks, ticks)
 
-    # annotate
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
             plt.text(j, i, str(cm[i, j]), ha="center", va="center", fontsize=7)
@@ -149,13 +148,12 @@ def save_confusion_matrix_png(cm: np.ndarray, out_path: str, title: str):
     plt.close(fig)
     print(f"[OK] Saved confusion matrix to {out_path}")
 
+
 def compute_and_log_cm(model, x_test, y_test, tag: str, save_png: bool = True, n_classes: int = 10):
-    # Predict labels
     y_proba = model.predict(x_test, verbose=0)
     y_pred = np.argmax(y_proba, axis=1)
 
     cm = confusion_matrix_np(y_test, y_pred, n_classes=n_classes)
-
     print_confusion_matrix(cm, title=f"{tag} Confusion Matrix")
 
     if save_png:
@@ -166,7 +164,7 @@ def compute_and_log_cm(model, x_test, y_test, tag: str, save_png: bool = True, n
 
 
 # -------------------------
-# 1) Train MNIST (DO NOT CHANGE TRAINING PARAMS)
+# 1) Train MNIST 
 # -------------------------
 def train_mnist(augment: bool = False, save_cm: bool = True):
     # NOTE: "augment" only affects the tag/log order to match the CNN script.
@@ -200,11 +198,16 @@ def train_mnist(augment: bool = False, save_cm: bool = True):
     # Confusion Matrix (MNIST test set)
     compute_and_log_cm(model, x_test, y_test, tag=f"[MNIST-{tag}]", save_png=save_cm)
 
+    # ✅ Sauvegarder UNIQUEMENT le modèle MNIST pour export_weights.py
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    model.save(os.path.join(MODELS_DIR, "mlp.keras"))
+    print("[OK] Saved MNIST MLP model to models/mlp.keras")
+
     return test_loss, test_acc, train_time
 
 
 # -------------------------
-# 2) Train CUSTOM then test on same CUSTOM (split)
+# 2) Train CUSTOM then test on same CUSTOM 
 # -------------------------
 def train_personnal(augment: bool = False, save_cm: bool = True):
     if not os.path.isdir(CUSTOM_ROOT):
