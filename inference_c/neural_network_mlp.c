@@ -394,6 +394,7 @@ bool mlp_load_weights(MLP *mlp, const char *filepath) {
     return true;
 }
 
+#ifdef MLP_STANDALONE_MAIN
 int main(int argc, char **argv) {
     if (argc < 2) {
         printf("Usage: %s <image_file>\n", argv[0]);
@@ -452,3 +453,4 @@ int main(int argc, char **argv) {
     
     return 0;
 }
+#endif
